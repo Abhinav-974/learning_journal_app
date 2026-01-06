@@ -1,4 +1,5 @@
 from db import get_connection
+from datetime import date
 
 
 def get_total_days(month_prefix: str) -> int:
@@ -75,8 +76,7 @@ def get_avg_entries_per_active_day(month_prefix: str) -> float:
 
 def get_daily_entry_counts(month_prefix: str):
     """
-    Returns a dict: {date: entry_count}
-    Used for calendar-style views.
+    Returns dict: {date: entry_count}
     """
     conn = get_connection()
     cur = conn.cursor()
@@ -95,3 +95,31 @@ def get_daily_entry_counts(month_prefix: str):
     conn.close()
 
     return {date: count for date, count in rows}
+
+
+# ----------------------------
+# Heatmap support
+# ----------------------------
+
+def get_entry_counts_between(start: date, end: date):
+    """
+    Returns dict {YYYY-MM-DD: count} between two dates (inclusive).
+    Used for GitHub-style heatmap.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT date, COUNT(*)
+        FROM entries
+        WHERE date BETWEEN ? AND ?
+        GROUP BY date
+        """,
+        (start.isoformat(), end.isoformat())
+    )
+
+    rows = cur.fetchall()
+    conn.close()
+
+    return {d: c for d, c in rows}

@@ -6,8 +6,8 @@ from db import get_connection
 # CREATE
 # ----------------------------
 
-def save_entry(entry_text: str):
-    """Save a new learning entry for today."""
+def save_entry(entry_text: str, tags: str | None = None):
+    """Save a new learning entry for today with optional tags."""
     conn = get_connection()
     cur = conn.cursor()
 
@@ -15,10 +15,10 @@ def save_entry(entry_text: str):
 
     cur.execute(
         """
-        INSERT INTO entries (date, entry_text)
-        VALUES (?, ?)
+        INSERT INTO entries (date, entry_text, tags)
+        VALUES (?, ?, ?)
         """,
-        (today, entry_text)
+        (today, entry_text, tags)
     )
 
     conn.commit()
@@ -38,7 +38,7 @@ def get_today_entries():
 
     cur.execute(
         """
-        SELECT entry_text
+        SELECT entry_text, tags
         FROM entries
         WHERE date = ?
         ORDER BY created_at ASC
@@ -49,7 +49,7 @@ def get_today_entries():
     rows = cur.fetchall()
     conn.close()
 
-    return [r[0] for r in rows]
+    return rows
 
 
 def get_entries_for_date(date_str: str):
@@ -59,7 +59,7 @@ def get_entries_for_date(date_str: str):
 
     cur.execute(
         """
-        SELECT id, entry_text, created_at
+        SELECT id, entry_text, tags, created_at
         FROM entries
         WHERE date = ?
         ORDER BY created_at ASC
@@ -83,7 +83,7 @@ def get_entries_for_month(month_prefix: str):
 
     cur.execute(
         """
-        SELECT date, entry_text, created_at
+        SELECT date, entry_text, tags, created_at
         FROM entries
         WHERE date LIKE ?
         ORDER BY date ASC, created_at ASC
@@ -101,18 +101,18 @@ def get_entries_for_month(month_prefix: str):
 # UPDATE / DELETE
 # ----------------------------
 
-def update_entry(entry_id: int, new_text: str):
-    """Update an existing entry by id."""
+def update_entry(entry_id: int, new_text: str, new_tags: str | None = None):
+    """Update an existing entry's text and tags."""
     conn = get_connection()
     cur = conn.cursor()
 
     cur.execute(
         """
         UPDATE entries
-        SET entry_text = ?
+        SET entry_text = ?, tags = ?
         WHERE id = ?
         """,
-        (new_text, entry_id)
+        (new_text, new_tags, entry_id)
     )
 
     conn.commit()
