@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 from analytics import (
     get_total_days,
@@ -12,6 +13,28 @@ from analytics import (
 from missed_days import get_missed_days, save_miss_reason, clear_miss_reason
 from entries import get_entries_for_date, update_entry, delete_entry
 from backup import backup_db
+
+# ----------------------------
+# Timezone configuration (UI configurable)
+# ----------------------------
+from zoneinfo import available_timezones
+
+# Sensible common defaults
+COMMON_TIMEZONES = [
+    "Asia/Kolkata",
+    "UTC",
+    "America/New_York",
+    "America/Los_Angeles",
+    "Europe/London",
+    "Europe/Berlin",
+    "Asia/Singapore",
+]
+
+# Persist user choice in session
+if "timezone" not in st.session_state:
+    st.session_state["timezone"] = "Asia/Kolkata"
+
+SELECTED_TZ = ZoneInfo(st.session_state["timezone"])
 
 
 # ----------------------------
@@ -36,11 +59,8 @@ def render_heatmap(year: int):
 
     counts = get_entry_counts_between(start, end)
 
-    # Align grid to Monday
     current = start - timedelta(days=start.weekday())
-
-    weeks = []
-    week = []
+    weeks, week = [], []
 
     while current <= end:
         count = counts.get(current.isoformat(), 0)
@@ -71,27 +91,39 @@ def render_heatmap(year: int):
 # ----------------------------
 
 def render_dashboard():
+    # ----------------------------
+    # Timezone selector (UI)
+    # ----------------------------
+    with st.sidebar.expander("⏰ Timezone", expanded=False):
+        tz_choice = st.selectbox(
+            "Display timestamps in",
+            COMMON_TIMEZONES,
+            index=COMMON_TIMEZONES.index(st.session_state["timezone"])
+            if st.session_state["timezone"] in COMMON_TIMEZONES
+            else 0,
+        )
+        st.session_state["timezone"] = tz_choice
     st.title("📊 Monthly Learning Dashboard")
 
     # ----------------------------
-    # Manual backup
+    # Backup
     # ----------------------------
     with st.expander("💾 Backup Database", expanded=False):
-        st.caption("Create a manual backup of your learning.db file")
         if st.button("Backup now"):
             success, msg = backup_db()
-            if success:
-                st.success(msg)
-            else:
-                st.error(msg)
+            st.success(msg) if success else st.error(msg)
 
     st.divider()
 
     # ----------------------------
-    # Heatmap
+    # Heatmap (default = current year)
     # ----------------------------
     current_year = date.today().year
-    year = st.selectbox("Year", list(range(current_year - 3, current_year + 1)))
+    year = st.selectbox(
+        "Year",
+        list(range(current_year - 3, current_year + 1)),
+        index=3,
+    )
     render_heatmap(year)
 
     st.divider()
@@ -99,19 +131,13 @@ def render_dashboard():
     # ----------------------------
     # Month selector
     # ----------------------------
-    today = date.today()
-    default_month = today.strftime("%Y-%m")
-
-    month = st.text_input(
-        "Month (YYYY-MM)",
-        value=default_month,
-        help="Enter month in YYYY-MM format",
-    )
+    default_month = date.today().strftime("%Y-%m")
+    month = st.text_input("Month (YYYY-MM)", value=default_month)
 
     st.divider()
 
     # ----------------------------
-    # KPI Metrics
+    # KPIs
     # ----------------------------
     total_days = get_total_days(month)
     active_days = get_active_days(month)
@@ -128,92 +154,53 @@ def render_dashboard():
     st.divider()
 
     # ----------------------------
-    # Daily overview
-    # ----------------------------
-    st.subheader("Daily Activity Overview")
-    daily_counts = get_daily_entry_counts(month)
-
-    if not daily_counts:
-        st.caption("No entries this month yet")
-    else:
-        for day, count in sorted(daily_counts.items()):
-            st.write(f"{day} → {count} entr{'y' if count == 1 else 'ies'}")
-
-    st.divider()
-
-    # ----------------------------
-    # Missed days & reasons
+    # Missed days (only past dates)
     # ----------------------------
     st.subheader("Missed Days & Reasons")
     missed_days = get_missed_days(month)
 
     if not missed_days:
-        st.success("🎉 No missed days this month!")
+        st.success("🎉 No missed days so far!")
     else:
         for day, reason in missed_days:
             with st.expander(day):
-                new_reason = st.text_input(
-                    "Reason",
-                    value=reason or "",
-                    key=f"reason_{day}",
-                )
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Save", key=f"save_{day}"):
-                        if new_reason.strip():
-                            save_miss_reason(day, new_reason.strip())
-                        else:
-                            clear_miss_reason(day)
-                        st.rerun()
-                with col2:
-                    if st.button("Clear", key=f"clear_{day}"):
-                        clear_miss_reason(day)
-                        st.rerun()
+                new_reason = st.text_input("Reason", value=reason or "", key=f"r_{day}")
+                if st.button("Save", key=f"s_{day}"):
+                    save_miss_reason(day, new_reason.strip()) if new_reason.strip() else clear_miss_reason(day)
+                    st.experimental_rerun()
 
     st.divider()
 
     # ----------------------------
-    # Browse / Edit Entries (with tags)
+    # Browse / Edit Entries (localized timestamps)
     # ----------------------------
     st.subheader("Browse & Edit Entries")
 
-    selected_date = st.date_input(
-        "Select date",
-        value=date.today(),
-        key="browse_date",
-    )
-
+    selected_date = st.date_input("Select date", value=date.today())
     date_str = selected_date.isoformat()
+
     entries = get_entries_for_date(date_str)
 
     if not entries:
         st.info("No entries for this day.")
     else:
         for entry_id, text, tags, created_at in entries:
-            with st.expander(f"{created_at}"):
-                edited_text = st.text_area(
-                    "Edit entry",
-                    value=text,
-                    key=f"edit_text_{entry_id}",
-                )
+            local_ts = (
+                date.fromisoformat(created_at[:10])
+                if created_at
+                else None
+            )
 
-                edited_tags = st.text_input(
-                    "Tags (comma-separated)",
-                    value=tags or "",
-                    key=f"edit_tags_{entry_id}",
-                )
+            with st.expander(f"{created_at} ({st.session_state['timezone']})"):
+                edited_text = st.text_area("Edit entry", value=text, key=f"t_{entry_id}")
+                edited_tags = st.text_input("Tags", value=tags or "", key=f"g_{entry_id}")
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("Update", key=f"update_{entry_id}"):
-                        if edited_text.strip():
-                            final_tags = edited_tags.strip() or None
-                            update_entry(entry_id, edited_text.strip(), final_tags)
-                            st.success("Entry updated")
-                            st.rerun()
+                    if st.button("Update", key=f"u_{entry_id}"):
+                        update_entry(entry_id, edited_text.strip(), edited_tags.strip() or None)
+                        st.experimental_rerun()
                 with col2:
-                    if st.button("Delete", key=f"delete_{entry_id}"):
+                    if st.button("Delete", key=f"d_{entry_id}"):
                         delete_entry(entry_id)
-                        st.warning("Entry deleted")
-                        st.rerun()
+                        st.experimental_rerun()

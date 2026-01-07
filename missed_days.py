@@ -1,47 +1,42 @@
+from datetime import date
 from db import get_connection
-
 
 def get_missed_days(month_prefix: str):
     """
-    Return all missed days for a given month.
-    A missed day = exists in `days` but has zero entries.
-
-    month_prefix format: YYYY-MM
-    Returns: list of (date, miss_reason)
+    Return missed days ONLY for dates strictly before today.
+    A day is missed if it has no entries and the date has already passed.
     """
     conn = get_connection()
     cur = conn.cursor()
+
+    today = date.today().isoformat()
 
     cur.execute(
         """
         SELECT d.date, d.miss_reason
         FROM days d
         LEFT JOIN entries e ON d.date = e.date
-        WHERE e.id IS NULL
-          AND d.date LIKE ?
+        WHERE d.date LIKE ?
+          AND d.date < ?
+        GROUP BY d.date
+        HAVING COUNT(e.id) = 0
         ORDER BY d.date ASC
         """,
-        (f"{month_prefix}%",)
+        (f"{month_prefix}%", today),
     )
 
     rows = cur.fetchall()
     conn.close()
-
     return rows
 
 
 def save_miss_reason(date_str: str, reason: str):
-    """Save or update a reason for missing a specific day."""
     conn = get_connection()
     cur = conn.cursor()
 
     cur.execute(
-        """
-        UPDATE days
-        SET miss_reason = ?
-        WHERE date = ?
-        """,
-        (reason, date_str)
+        "UPDATE days SET miss_reason = ? WHERE date = ?",
+        (reason, date_str),
     )
 
     conn.commit()
@@ -49,17 +44,12 @@ def save_miss_reason(date_str: str, reason: str):
 
 
 def clear_miss_reason(date_str: str):
-    """Clear an existing miss reason for a day."""
     conn = get_connection()
     cur = conn.cursor()
 
     cur.execute(
-        """
-        UPDATE days
-        SET miss_reason = NULL
-        WHERE date = ?
-        """,
-        (date_str,)
+        "UPDATE days SET miss_reason = NULL WHERE date = ?",
+        (date_str,),
     )
 
     conn.commit()
