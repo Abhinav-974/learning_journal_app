@@ -1,5 +1,4 @@
 from datetime import date
-
 from db import get_connection
 
 # ----------------------------
@@ -7,7 +6,6 @@ from db import get_connection
 # ----------------------------
 
 def save_entry(entry_text: str, tags: str | None = None):
-    """Save a new learning entry for today with optional tags."""
     conn = get_connection()
     cur = conn.cursor()
 
@@ -18,7 +16,7 @@ def save_entry(entry_text: str, tags: str | None = None):
         INSERT INTO entries (date, entry_text, tags)
         VALUES (?, ?, ?)
         """,
-        (today, entry_text, tags)
+        (today, entry_text, tags),
     )
 
     conn.commit()
@@ -30,7 +28,6 @@ def save_entry(entry_text: str, tags: str | None = None):
 # ----------------------------
 
 def get_today_entries():
-    """Return all entries logged today (ordered by time)."""
     conn = get_connection()
     cur = conn.cursor()
 
@@ -43,17 +40,15 @@ def get_today_entries():
         WHERE date = ?
         ORDER BY created_at ASC
         """,
-        (today,)
+        (today,),
     )
 
     rows = cur.fetchall()
     conn.close()
-
     return rows
 
 
 def get_entries_for_date(date_str: str):
-    """Return all entries for a specific date."""
     conn = get_connection()
     cur = conn.cursor()
 
@@ -64,37 +59,31 @@ def get_entries_for_date(date_str: str):
         WHERE date = ?
         ORDER BY created_at ASC
         """,
-        (date_str,)
+        (date_str,),
     )
 
     rows = cur.fetchall()
     conn.close()
-
     return rows
 
 
-def get_entries_for_month(month_prefix: str):
-    """
-    Fetch all entries for a given month.
-    month_prefix format: YYYY-MM
-    """
+def get_all_tags():
+    """Return a sorted list of distinct tags used so far."""
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute(
-        """
-        SELECT date, entry_text, tags, created_at
-        FROM entries
-        WHERE date LIKE ?
-        ORDER BY date ASC, created_at ASC
-        """,
-        (f"{month_prefix}%",)
-    )
-
+    cur.execute("SELECT tags FROM entries WHERE tags IS NOT NULL")
     rows = cur.fetchall()
     conn.close()
 
-    return rows
+    tag_set = set()
+    for (tag_str,) in rows:
+        for tag in tag_str.split(","):
+            tag = tag.strip()
+            if tag:
+                tag_set.add(tag)
+
+    return sorted(tag_set)
 
 
 # ----------------------------
@@ -102,7 +91,6 @@ def get_entries_for_month(month_prefix: str):
 # ----------------------------
 
 def update_entry(entry_id: int, new_text: str, new_tags: str | None = None):
-    """Update an existing entry's text and tags."""
     conn = get_connection()
     cur = conn.cursor()
 
@@ -112,7 +100,7 @@ def update_entry(entry_id: int, new_text: str, new_tags: str | None = None):
         SET entry_text = ?, tags = ?
         WHERE id = ?
         """,
-        (new_text, new_tags, entry_id)
+        (new_text, new_tags, entry_id),
     )
 
     conn.commit()
@@ -120,14 +108,9 @@ def update_entry(entry_id: int, new_text: str, new_tags: str | None = None):
 
 
 def delete_entry(entry_id: int):
-    """Delete an entry by id."""
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute(
-        "DELETE FROM entries WHERE id = ?",
-        (entry_id,)
-    )
-
+    cur.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
     conn.commit()
     conn.close()
