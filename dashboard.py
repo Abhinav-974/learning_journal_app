@@ -167,7 +167,7 @@ def render_dashboard():
                 new_reason = st.text_input("Reason", value=reason or "", key=f"r_{day}")
                 if st.button("Save", key=f"s_{day}"):
                     save_miss_reason(day, new_reason.strip()) if new_reason.strip() else clear_miss_reason(day)
-                    st.experimental_rerun()
+                    st.rerun()
 
     st.divider()
 
@@ -199,8 +199,8 @@ def render_dashboard():
                 with col1:
                     if st.button("Update", key=f"u_{entry_id}"):
                         update_entry(entry_id, edited_text.strip(), edited_tags.strip() or None)
-                        st.experimental_rerun()
+                        st.rerun()
                 with col2:
                     if st.button("Delete", key=f"d_{entry_id}"):
                         delete_entry(entry_id)
-                        st.experimental_rerun()
+                        st.rerun()

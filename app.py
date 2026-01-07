@@ -59,7 +59,7 @@ if page == "Daily Entry":
             tags_str = ", ".join(sorted(all_tags)) if all_tags else None
             save_entry(entry_text.strip(), tags_str)
             st.success("Saved! Add another one 👇")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.warning("Entry cannot be empty")
 
